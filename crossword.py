@@ -8,7 +8,7 @@ def preProcess(img):
                                  cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                  cv2.THRESH_BINARY_INV, 11, 2)
 
-# 6) Estimate cell size
+# Estimate cell size
 def estimate_cell_size(cropped_img):
     gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
     _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
@@ -56,38 +56,6 @@ def estimate_cell_size(cropped_img):
     num_cols = max(len(row) for row in rows)
 
     return avg_w, avg_h, num_rows, num_cols
-
-def estimate_border_thickness(cropped_img):
-    gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY_INV)
-
-    # Sum pixel values along rows and columns
-    vertical_sum = np.sum(binary, axis=0)  # sum columns (vertical lines)
-    horizontal_sum = np.sum(binary, axis=1)  # sum rows (horizontal lines)
-
-    def estimate_thickness_from_profile(profile, axis_name):
-        threshold = 0.6 * np.max(profile)  # dynamic threshold
-        is_line = profile > threshold
-        thicknesses = []
-        count = 0
-        for val in is_line:
-            if val:
-                count += 1
-            elif count > 0:
-                thicknesses.append(count)
-                count = 0
-        if count > 0:
-            thicknesses.append(count)
-
-        # Filter out unreasonable values
-        filtered = [t for t in thicknesses if 1 <= t <= 15]
-        if len(filtered) < 3:
-            print(f"[Warning] Few {axis_name} lines detected, raw: {thicknesses}")
-        return int(np.median(filtered)) if filtered else 1
-
-    border_w = estimate_thickness_from_profile(vertical_sum, "vertical")
-    border_h = estimate_thickness_from_profile(horizontal_sum, "horizontal")
-    return border_w, border_h
 
 def estimate_border_thickness(binary_img, cell_w, cell_h):
     h, w = binary_img.shape
@@ -158,6 +126,59 @@ def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
 
     return debug_img, grid
 
+def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid, debug=False):
+    height, width = cropped_img.shape[:2]
+
+    for i in range(rows):
+        for j in range(cols):
+            if grid and grid[i][j] == 0:
+                continue  # skip this cell
+
+            x = j * cell_size + border_thickness
+            y = i * cell_size + border_thickness
+            w = cell_size - 3 * border_thickness
+            h = cell_size - 3 * border_thickness
+
+            if x + w > width or y + h > height:
+                continue  # out of bounds
+
+            cell = cropped_img[y:y+h, x:x+w]
+
+            # Convert to grayscale if needed
+            if len(cell.shape) == 3:
+                gray_cell = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+            else:
+                gray_cell = cell.copy()
+
+            # Threshold to binary
+            _, binary_cell = cv2.threshold(gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+            # Find black pixel locations
+            coords = cv2.findNonZero(binary_cell)
+            if coords is not None:
+                x_, y_, w_, h_ = cv2.boundingRect(coords)
+                padding = 2
+                x_start = max(0, x_ - padding)
+                y_start = max(0, y_ - padding)
+                x_end = min(binary_cell.shape[1], x_ + w_ + padding)
+                y_end = min(binary_cell.shape[0], y_ + h_ + padding)
+                digit_crop = binary_cell[y_start:y_end, x_start:x_end]
+
+                if debug:
+                    cv2.imshow("Original Cell", cell)
+                    cv2.imshow("Digit", digit_crop)
+                    cv2.imshow("Cell", binary_cell)
+                    print(f"Digit at cell ({i}, {j})")
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+            else:
+                if debug:
+                    cv2.imshow("Empty Cell", binary_cell)
+                    print(f"Empty cell at ({i}, {j})")
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+
+
 
 if __name__ == "__main__":
     path = input("Enter image path: ")
@@ -183,7 +204,7 @@ if __name__ == "__main__":
     mask_rgb = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
     isolated = cv2.bitwise_and(img, mask_rgb)
 
-    # 4. Crop grid (add 1 px padding)
+    # 4. Crop grid (add 2 px padding)
     x, y, w, h = cv2.boundingRect(largest)
     cropped_isolated = isolated[y:y+h+2, x:x+w+2]
 
@@ -218,5 +239,10 @@ if __name__ == "__main__":
     cv2.imshow("Cropped Isolated", cropped_isolated)
     cv2.imshow("Binary Cropped", binary_cropped)
     cv2.imshow("Grid classification", grid_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    numbers = identify_numbers(cropped_isolated, cell_w, rows, cols, border_thickness, grid, debug=True)
+
     cv2.waitKey(0)
     cv2.destroyAllWindows()
