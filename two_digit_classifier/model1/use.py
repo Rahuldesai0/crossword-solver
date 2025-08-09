@@ -1,4 +1,4 @@
-from two_digit_classifier.model import model
+from .model import model
 import numpy as np
 from PIL import Image
 import os
