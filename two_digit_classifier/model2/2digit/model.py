@@ -2,14 +2,16 @@ import torch
 import torch.nn as nn
 
 class CNN(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, img_size = (28, 56)):
         super().__init__()
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.pool = nn.AvgPool2d(2)
         self.conv2 = nn.Conv2d(6, 16, 5)
+        self.row = img_size[0]
+        self.col = img_size[1]
 
         with torch.no_grad():
-            dummy = torch.zeros(1, 1, 28, 56)  # change if your input size differs
+            dummy = torch.zeros(1, 1, self.row, self.col)  # change if your input size differs
             dummy = self.pool(torch.relu(self.conv1(dummy)))
             dummy = self.pool(torch.relu(self.conv2(dummy)))
             flatten_size = dummy.numel()

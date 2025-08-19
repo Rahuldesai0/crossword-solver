@@ -3,26 +3,6 @@ from PIL import Image
 import random 
 import numpy as np 
 
-df = pd.read_csv('./tmnist/TMNIST_Data.csv')
-df = df.drop(['names'], axis=1)
-
-# print(df.head())
-# print(len(df))
-
-# Converting 784 columns to a single 28x28 image column
-
-labels = df['labels']
-pixels = df.drop(columns='labels').to_numpy()
-
-images = [row.reshape(28, 28) for row in pixels]
-
-new_df = pd.DataFrame({
-    'label': labels,
-    'image': images
-})
-
-# crosscreate 2 digits :)
-
 def crop_digit(img):
     # Find rows/cols where there's any non-zero pixel
     rows = np.any(img > 0, axis=1)
@@ -61,9 +41,25 @@ def create_2digit_dataset(df, examples=50000, pad=2, outer_pad=5):
     
     return pd.DataFrame(data)
 
-digit2_df = create_2digit_dataset(new_df)
-digit2_df.to_pickle('tmnist/2digit_mnist.pkl')     # as direct numpy arrays stored
-img = Image.fromarray(digit2_df.iloc[0]['image'])
-label = digit2_df.iloc[0]['label']
+import pandas as pd
+import numpy as np
+from PIL import Image
+
+df = pd.read_csv('./tmnist/TMNIST_Data.csv')
+df = df.drop(['names'], axis=1)
+
+labels = df['labels']
+pixels = df.drop(columns='labels').to_numpy() 
+
+images = [row.reshape(28, 28).astype(np.uint8) for row in pixels]
+
+new_df = pd.DataFrame({
+    'label': labels,
+    'image': images
+})
+
+new_df.to_pickle('tmnist/1digit_mnist.pkl')
+img = Image.fromarray(new_df.iloc[0]['image'])
+label = new_df.iloc[0]['label']
 print(label)
 img.show()
