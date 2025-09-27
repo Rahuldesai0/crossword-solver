@@ -1,5 +1,11 @@
 import cv2
 import numpy as np
+from two_digit_classifier.model2.model import CNN
+import torch
+
+model = CNN(num_classes=100)
+model.load_state_dict(torch.load('./two_digit_classifier/model2/model1.pth', map_location='cpu'))
+model.eval()
 
 def preProcess(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -114,7 +120,7 @@ def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
             cy = y1 + cell_h // 2
             pixel = gray[cy, cx]
 
-            value = 0 if pixel < 50 else 1
+            value = 0 if pixel < 150 else 1
             row.append(value)
 
             # Debug: Draw cell border and classification
@@ -129,20 +135,22 @@ def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
 def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid, debug=False):
     height, width = cropped_img.shape[:2]
 
+    cell_size -= border_thickness / 4
     for i in range(rows):
         for j in range(cols):
             if grid and grid[i][j] == 0:
                 continue  # skip this cell
 
-            x = j * cell_size + border_thickness
-            y = i * cell_size + border_thickness
-            w = cell_size - 3 * border_thickness
-            h = cell_size - 3 * border_thickness
+            # Extract cell from full image
+            x = j * cell_size
+            y = i * cell_size
+            w = cell_size
+            h = cell_size
 
             if x + w > width or y + h > height:
                 continue  # out of bounds
 
-            cell = cropped_img[y:y+h, x:x+w]
+            cell = cropped_img[int(y+border_thickness*1.5):int(y+h), int(x+border_thickness*1.5):int(x+w)]
 
             # Convert to grayscale if needed
             if len(cell.shape) == 3:
@@ -150,33 +158,78 @@ def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid,
             else:
                 gray_cell = cell.copy()
 
-            # Threshold to binary
-            _, binary_cell = cv2.threshold(gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            # Threshold to binary (invert so digit is white)
+            _, binary_cell = cv2.threshold(
+                gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+            )
 
-            # Find black pixel locations
+            # Remove white border by cropping to digit bounding box
             coords = cv2.findNonZero(binary_cell)
-            if coords is not None:
-                x_, y_, w_, h_ = cv2.boundingRect(coords)
-                padding = 2
-                x_start = max(0, x_ - padding)
-                y_start = max(0, y_ - padding)
-                x_end = min(binary_cell.shape[1], x_ + w_ + padding)
-                y_end = min(binary_cell.shape[0], y_ + h_ + padding)
+            c = cv2.boundingRect(coords)
+            if coords is not None and c[2] < cell_size//2 and c[3] < cell_size//2:
+                x_, y_, w_, h_ = c
+
+                # Small padding so strokes aren’t cut
+                padding = 3
+                x_start = max(0, x_)
+                y_start = max(0, y_)
+                x_end = min(binary_cell.shape[1], x_ + w_ )
+                y_end = min(binary_cell.shape[0], y_ + h_ )
+
                 digit_crop = binary_cell[y_start:y_end, x_start:x_end]
+                digit_crop = cv2.copyMakeBorder(
+                digit_crop,
+                top=padding,
+                bottom=padding,
+                left=padding,
+                right=padding,
+                borderType=cv2.BORDER_CONSTANT,
+                value=0
+            )
+
+                # Predict
+                digit = predict_image(digit_crop, model)
 
                 if debug:
                     cv2.imshow("Original Cell", cell)
-                    cv2.imshow("Digit", digit_crop)
-                    cv2.imshow("Cell", binary_cell)
-                    print(f"Digit at cell ({i}, {j})")
+                    cv2.imshow("Binary Cell", binary_cell)
+                    cv2.imshow("Cropped Digit", digit_crop)
+                    print(f"Digit size: {digit_crop.shape}")
+                    print(f"Digit at cell ({i}, {j}) detected: {digit}")
                     cv2.waitKey(0)
                     cv2.destroyAllWindows()
+
             else:
                 if debug:
-                    cv2.imshow("Empty Cell", binary_cell)
                     print(f"Empty cell at ({i}, {j})")
+                    cv2.imshow("Original Cell", cell)
+                    cv2.imshow("Empty Cell", binary_cell)
                     cv2.waitKey(0)
                     cv2.destroyAllWindows()
+
+
+
+
+def predict_image(img_np, model):
+    target_h = 28
+    target_w = 56
+
+    if len(img_np.shape) == 3 and img_np.shape[2] == 3:
+        img_gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
+    else:
+        img_gray = img_np.copy()
+
+    img_resized = cv2.resize(img_gray, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+    img_arr = 255.0 - img_resized.astype(np.float32)
+
+    img_tensor = torch.tensor(img_arr).unsqueeze(0).unsqueeze(0)
+
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        values, indices = torch.topk(outputs, k=3, dim=1)
+
+    return indices[0].cpu().tolist()
 
 
 
@@ -233,11 +286,11 @@ if __name__ == "__main__":
     grid_img, grid = classify_grid(cropped_isolated, cell_w, cell_h, rows, cols, debug=True)
     for r in grid:
         print(r)
-    
+    0
     # 8. Show images
-    cv2.imshow("Original", img)
+    # cv2.imshow("Original", img)
     cv2.imshow("Cropped Isolated", cropped_isolated)
-    cv2.imshow("Binary Cropped", binary_cropped)
+    # cv2.imshow("Binary Cropped", binary_cropped)
     cv2.imshow("Grid classification", grid_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
