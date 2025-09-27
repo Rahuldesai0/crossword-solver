@@ -10,11 +10,14 @@ class GitHubModelSolver(CrosswordSolverModel):
     def __init__(self, input_json, model_name="openai/gpt-4.1"):
         super().__init__(input_json)
         self.model_name = model_name
-        self.api_key = os.environ.get("GITHUB_MODELS_TOKEN")  
-        
-    def solve(self):
+        dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+        load_dotenv(dotenv_path)
+        self.api_key = os.environ.get("GITHUB_MODELS_TOKEN")
         if not self.api_key:
             raise ValueError("Missing GITHUB_MODELS_TOKEN in environment variables")
+
+    def solve(self):
+        print("Solving....")
 
         url = "https://models.github.ai/inference/chat/completions"
         headers = {
@@ -26,7 +29,10 @@ class GitHubModelSolver(CrosswordSolverModel):
         data = {
             "model": self.model_name,
             "messages": [
-                {"role": "user", "content": self.prompt}
+                {
+                    "role": "user",
+                    "content": self.full_prompt
+                }
             ]
         }
 
@@ -36,33 +42,60 @@ class GitHubModelSolver(CrosswordSolverModel):
             raise RuntimeError(f"GitHub API error {response.status_code}: {response.text}")
 
         result = response.json()
-        # Extract model output
         return result["choices"][0]["message"]["content"]
 
 
 
 input_json = """
 {
-  "grid": [
-    ["#", ".", ".", "#"],
-    [".", ".", ".", "."],
-    [".", "#", ".", "."],
-    ["#", ".", ".", "#"]
-  ],
-  "clues": {
-    "across": {
-      "1": "Opposite of down",
-      "2": "The first letter of the alphabet"
-    },
-    "down": {
-      "1": "Not yes",
-      "3": "Hot drink made from leaves"
-    }
+  "1down": {
+    "length": 4,
+    "intersections": [["3across", 6], ["5across", 2]],
+    "hint": "To disappear gradually"
+  },
+  "2down": {
+    "length": 4,
+    "intersections": [["5across", 7], ["4across", 10]],
+    "hint": "To change from a solid to a liquid"
+  },
+  "3across": {
+    "length": 8,
+    "intersections": [["1down", 2], ["5across", 4],
+    "hint": "Neighbour of Laos and Cambodia"
+  },
+  "4across": {
+    "length": 13,
+    "intersections": [["2down", 4]],
+    "hint": "The stargazers' favourite pastime, connecting the dots in the night sky"
+  },
+  "5across": {
+    "length": 7,
+    "intersections": [["1down", 4], ["2down", 2]],
+    "hint": "Turn waste into new materials or products"
   }
 }
-
 """
 
-# solver = GitHubModelSolver(input_json=input_json, model_name="openai/gpt-4.1")
-solver = GitHubModelSolver(input_json=input_json, model_name="deepseek/deepseek-v3-0324")
-print(solver.solve())
+
+print("Select a model to use:")
+print("1. OpenAI GPT-5")
+print("2. DeepSeek v3")
+print("3. LLaMA")
+print("4. Grok")
+
+choice = input("Enter the number corresponding to the model: ").strip()
+
+if choice == "1":
+    solver = GitHubModelSolver(input_json=input_json, model_name="openai/gpt-5")
+elif choice == "2":
+    solver = GitHubModelSolver(input_json=input_json, model_name="deepseek/DeepSeek-R1-0528")
+elif choice == "3":
+    solver = GitHubModelSolver(input_json=input_json, model_name="meta/Llama-4-Scout-17B-16E-Instruct")
+elif choice == "4":
+    solver = GitHubModelSolver(input_json=input_json, model_name="xAI/grok-3-mini")
+else:
+    print("Invalid choice, defaulting to OpenAI GPT-5")
+    solver = GitHubModelSolver(input_json=input_json, model_name="openai/gpt-5")
+
+result = solver.solve()
+print(result)
