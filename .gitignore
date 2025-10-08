@@ -4,3 +4,8 @@
 /two_digit_classifier/model2/1digit/test_images
 /two_digit_classifier/model2/2digit/model1.pth
 /two_digit_classifier/model2/1digit/model1_1digit.pth
+/two_digit_classifier/model3/tmnist
+/two_digit_classifier/model3/two_digit/model_combined_28x28.pth
+/two_digit_classifier/model3/two_digit/model_combined.pth
+/two_digit_classifier/model2/one_digit/model1_1digit.pth
+/two_digit_classifier/model2/two_digit/model1.pth

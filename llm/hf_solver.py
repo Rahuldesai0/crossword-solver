@@ -117,5 +117,12 @@ input_json = """
 }
 """
 
-model = HuggingFaceModelSolver(input_json)
-print(model.solve())
+if __name__ == '__main__':
+    models = [
+        'Qwen/Qwen3-VL-235B-A22B-Instruct:novita',
+        'Kwaipilot/KAT-Dev',
+        'zai-org/GLM-4.5',
+        'deepcogito/cogito-v2-preview-llama-109B-MoE'
+    ]
+    model = HuggingFaceModelSolver(input_json, models[3])
+    print(model.solve())

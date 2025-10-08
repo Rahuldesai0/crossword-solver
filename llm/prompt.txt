@@ -23,7 +23,7 @@ Rules:
 }}
 ````
 
-Return **only** the JSON as text.
+Return **only** the JSON as text, as I want to convert it into a dictionary later on.
 Example output:
 {
   "solutions": {

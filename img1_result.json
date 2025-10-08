@@ -1,0 +1,44 @@
+{
+    "solutions": {
+        "across": {
+            "1": "LAPTOP",
+            "7": "BBC",
+            "10": "ISAYNO",
+            "11": "RIO",
+            "12": "SINKERBALL",
+            "14": "PAGE",
+            "15": "TANGO",
+            "16": "DANDER",
+            "17": "DANIEL",
+            "21": "IDOLS",
+            "22": "AWES",
+            "26": "TINKERBELL",
+            "28": "TEE",
+            "29": "RUBBLE",
+            "30": "OUT",
+            "31": "TEASED"
+        },
+        "down": {
+            "1": "LISP",
+            "2": "ASIA",
+            "3": "PANG",
+            "4": "TYKE",
+            "5": "ONE",
+            "6": "PORTAL",
+            "7": "BRAND",
+            "8": "BILGE",
+            "9": "COLOR",
+            "13": "BAN",
+            "16": "DESERT",
+            "17": "DITTO",
+            "18": "ADIEU",
+            "19": "NONET",
+            "20": "ILK",
+            "22": "ABBA",
+            "23": "WEBS",
+            "24": "ELLE",
+            "25": "SLED",
+            "27": "RUE"
+        }
+    }
+}
