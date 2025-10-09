@@ -4,6 +4,7 @@ import torch
 from skimage.morphology import skeletonize
 from llm.github_model_solver import GitHubModelSolver
 from llm.hf_solver import HuggingFaceModelSolver
+from ocr import ocr_image
 
 model_choice = 1  # set 1 or 2
 
@@ -117,10 +118,16 @@ def estimate_border_thickness(binary_img, cell_w, cell_h):
 
     return int(np.median(border_samples)) if border_samples else -1
 
-def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
+def classify_grid(cropped_img, num_rows, num_cols, debug=False, resize=None):
+    if resize:
+        cropped_img = cv2.resize(cropped_img, resize, interpolation=cv2.INTER_AREA)
+
     gray = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
     grid = []
     debug_img = cropped_img.copy()
+
+    cell_h = cropped_img.shape[0] // num_rows
+    cell_w = cropped_img.shape[1] // num_cols
 
     for r in range(num_rows):
         row = []
@@ -130,10 +137,6 @@ def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
             x2 = x1 + cell_w
             y2 = y1 + cell_h
 
-            if x2 > gray.shape[1] or y2 > gray.shape[0]:
-                row.append(-1)
-                continue
-
             cx = x1 + cell_w // 2
             cy = y1 + cell_h // 2
             pixel = gray[cy, cx]
@@ -141,21 +144,25 @@ def classify_grid(cropped_img, cell_w, cell_h, num_rows, num_cols, debug=False):
             value = 0 if pixel < 150 else 1
             row.append(value)
 
-            # Debug: Draw cell border and classification
             if debug:
                 color = (0, 0, 255) if value == 0 else (0, 255, 0)
                 cv2.rectangle(debug_img, (x1, y1), (x2, y2), color, 1)
                 cv2.circle(debug_img, (cx, cy), 2, color, -1)
         grid.append(row)
 
-    return debug_img, grid
+    return debug_img, grid, cell_w, cell_h
+
 
 
 """Corner Digit Detection"""
-def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid, debug=False, hardcode=False):
+def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid, debug=False, hardcode=False, ocr=False, save=False):
     height, width = cropped_img.shape[:2]
+    import os 
 
     result = {}
+    save_dir = "cells"
+    if save and not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     cell_size -= border_thickness / 4
     for i in range(rows):
@@ -184,6 +191,15 @@ def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid,
             _, binary_cell = cv2.threshold(
                 gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
             )
+
+            if save:
+                cell_filename = os.path.join(save_dir, f"cell_{i}_{j}.png")
+                cv2.imwrite(cell_filename, binary_cell)
+
+            if ocr:
+                text = predict_image(binary_cell, model=model, ocr=ocr)
+                print("Text result from OCR: ", text)
+                return 
 
             # Remove white border by cropping to digit bounding box
             coords = cv2.findNonZero(binary_cell)
@@ -225,8 +241,6 @@ def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid,
 
                 # --- New preprocessing: morphological clean-up + resize to 16x16 ---
                 processed = preprocess_digit(digit_crop, digit_size=32, final_size=(32, 32), debug=debug)
-
-
                 # Predict (predict_image will up/downscale as necessary for the model)
                 if model is not None:
                     digit = predict_image(processed, model)
@@ -254,6 +268,8 @@ def identify_numbers(cropped_img, cell_size, rows, cols, border_thickness, grid,
                     cv2.imshow("Empty Cell", binary_cell)
                     cv2.waitKey(0)
                     cv2.destroyAllWindows()
+
+
     if hardcode:
         return {
             1:(0,0), 2:(0,1), 3:(0,2), 4:(0,3), 5:(0,4), 6:(0,5), 7:(0,7), 8:(0,8), 9:(0,9),
@@ -314,7 +330,11 @@ def preprocess_digit(img_bin, digit_size=28, final_size=(28, 56), sharpen=True, 
 
     return final
 
-def predict_image(img_np, model, model_choice=1, min_size=10):
+def predict_image(img_np, model, model_choice=1, min_size=10, ocr=False):
+    if ocr:
+        text, data, img = ocr_image(img_np)
+        return text
+
     target_h = 28
     target_w = 56 if model_choice == 2 else 28
 
@@ -445,11 +465,8 @@ def overlay_grid(grid_img, grid, numbers, final_hints, result):
 
 
 
-
-
-
 if __name__ == "__main__":
-    path = "img1.jpg"
+    path = "img3.jpg"
     img = cv2.imread(path)
     if img is None:
         print("Error loading image.")
@@ -498,72 +515,87 @@ if __name__ == "__main__":
     cols = round(H/cell_h)
     print(f"Estimated Rows: {rows}, Columns: {cols}, Cell W: {cell_w:.2f}, Cell H: {cell_h:.2f}")
     print("Estimated Border Thickness:", border_thickness)
-    grid_img, grid = classify_grid(cropped_isolated, cell_w, cell_h, rows, cols, debug=True)
+    grid_img, grid, cell_w_ind, cell_h_ind = classify_grid(cropped_isolated, rows, cols, debug=True, resize=None)
+
     for r in grid:
         print(r)
     0
     # 8. Show images
     # cv2.imshow("Original", img)
     # cv2.imshow("Cropped Isolated", cropped_isolated)
-    # cv2.imshow("Binary Cropped", binary_cropped)
-    # cv2.imshow("Grid classification", grid_img)
+    cv2.imshow("Binary Cropped", binary_cropped)
+    cv2.imshow("Grid classification", grid_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    numbers = identify_numbers(cropped_isolated, cell_w, rows, cols, border_thickness, grid, debug=False, hardcode=True)
-    print(numbers)
+    
+    cell_size = grid_img.shape[0] // rows  # assuming square cells; same as height / rows
+    border_thickness = 2  # adjust if needed
+
+    numbers = identify_numbers(
+        cropped_img=cropped_isolated,
+        cell_size=cell_size,
+        rows=rows,
+        cols=cols,
+        border_thickness=border_thickness,
+        grid=grid,
+        debug=True,
+        hardcode=True,
+        ocr=False,
+        save=False
+    )
 
     # Now we have grid numbers
-    hints = {
-        1: {"across": "Computer on a cafe table, probably", "down": "Speech mannerism"},
-        2: {"down": "Cambodia’s continent"},
-        3: {"down": "Hunger twinge"},
-        4: {"down": "Little kid"},
-        5: {"down": "Twelve minus eleven"},
-        6: {"down": "Wormhole in a sci-fi movie, e.g."},
-        7: {"across": "“Sherlock” network", "down": "General Electric or General Mills"},
-        8: {"down": "Ship’s lower area"},
-        9: {"down": "Printer type"},
-        10: {"across": "Forget it!"},
-        11: {"across": "City home to the Copacabana"},
-        12: {"across": "Tough pitch to hit"},
-        13: {"down": "Disallow"},
-        14: {"across": "Kindle display"},
-        15: {"across": "Dance for duos"},
-        16: {"across": "Allergen from a pet", "down": "Kalahari or Gobi"},
-        17: {"across": "Actor Craig of “Casino Royale”", "down": "“Same here!”"},
-        18: {"down": "Farewell, to François"},
-        19: {"down": "Song for nine voices"},
-        20: {"down": "Sort or kind"},
-        21: {"across": "Objects of worship"},
-        22: {"across": "Greatly impresses", "down": "“Take a Chance on Me” singers"},
-        23: {"down": "Halloween decorations"},
-        24: {"down": "Model Macpherson"},
-        25: {"down": "Downhill racer"},
-        26: {"across": "Pixie that responds to clapping"},
-        27: {"down": "Feel remorse"},
-        28: {"across": "Golfer’s peg"},
-        29: {"across": "Demolition site debris"},
-        30: {"across": "Away from home"},
-        31: {"across": "Kidded around"}
-    }
+    # hints = {
+    #     1: {"across": "Computer on a cafe table, probably", "down": "Speech mannerism"},
+    #     2: {"down": "Cambodia’s continent"},
+    #     3: {"down": "Hunger twinge"},
+    #     4: {"down": "Little kid"},
+    #     5: {"down": "Twelve minus eleven"},
+    #     6: {"down": "Wormhole in a sci-fi movie, e.g."},
+    #     7: {"across": "“Sherlock” network", "down": "General Electric or General Mills"},
+    #     8: {"down": "Ship’s lower area"},
+    #     9: {"down": "Printer type"},
+    #     10: {"across": "Forget it!"},
+    #     11: {"across": "City home to the Copacabana"},
+    #     12: {"across": "Tough pitch to hit"},
+    #     13: {"down": "Disallow"},
+    #     14: {"across": "Kindle display"},
+    #     15: {"across": "Dance for duos"},
+    #     16: {"across": "Allergen from a pet", "down": "Kalahari or Gobi"},
+    #     17: {"across": "Actor Craig of “Casino Royale”", "down": "“Same here!”"},
+    #     18: {"down": "Farewell, to François"},
+    #     19: {"down": "Song for nine voices"},
+    #     20: {"down": "Sort or kind"},
+    #     21: {"across": "Objects of worship"},
+    #     22: {"across": "Greatly impresses", "down": "“Take a Chance on Me” singers"},
+    #     23: {"down": "Halloween decorations"},
+    #     24: {"down": "Model Macpherson"},
+    #     25: {"down": "Downhill racer"},
+    #     26: {"across": "Pixie that responds to clapping"},
+    #     27: {"down": "Feel remorse"},
+    #     28: {"across": "Golfer’s peg"},
+    #     29: {"across": "Demolition site debris"},
+    #     30: {"across": "Away from home"},
+    #     31: {"across": "Kidded around"}
+    # }
 
-    final_hints = compute_lengths_and_intersections(grid, numbers, hints)
-    # print(final_hints)
+    # final_hints = compute_lengths_and_intersections(grid, numbers, hints)
+    # # print(final_hints)
 
 
-    print("JSON Result: ")
-    # solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
-    solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5")
-    result = solver.solve()
-    print(result)
+    # print("JSON Result: ")
+    # # solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
+    # solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5")
+    # result = solver.solve()
+    # print(result)
 
-    # for dummy
-    solved_img, conflict = overlay_grid(cropped_isolated, grid, numbers, final_hints, result)
-    print("Conflict: ", conflict)
-    cv2.imshow("Solved Crossword", solved_img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # # for dummy
+    # solved_img, conflict = overlay_grid(cropped_isolated, grid, numbers, final_hints, result)
+    # print("Conflict: ", conflict)
+    # cv2.imshow("Solved Crossword", solved_img)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
