@@ -3,12 +3,15 @@ import numpy as np
 from grid_classifier import preProcess, estimate_cell_size, estimate_border_thickness, classify_grid
 from digit_recogniser import identify_numbers
 from generate_json import compute_lengths_and_intersections
-from llm.github_model_solver import GitHubModelSolver
+from llm.solvers import GitHubModelSolver, HuggingFaceModelSolver, GeminiSolver
 from overlay_grid import overlay_grid
+import json
 
-solve_full = False
+solve = True
+debug = False
 
 path = "test/img3.jpg"
+use_solver = "github"
 img = cv2.imread(path)
 if img is None:
     print("Error loading image.")
@@ -58,17 +61,19 @@ cols = round(H/cell_h)
 print(f"Estimated Rows: {rows}, Columns: {cols}, Cell W: {cell_w:.2f}, Cell H: {cell_h:.2f}")
 print("Estimated Border Thickness:", border_thickness)
 grid_img, grid, cell_w_ind, cell_h_ind = classify_grid(cropped_isolated, rows, cols, debug=True, resize=None)
+print(len(grid_img), len(grid_img[0]))
 
 for r in grid:
     print(r)
 0
 # Show images
-# cv2.imshow("Original", img)
-# cv2.imshow("Cropped Isolated", cropped_isolated)
-cv2.imshow("Binary Cropped", binary_cropped)
-cv2.imshow("Grid classification", grid_img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+if debug:
+    cv2.imshow("Original", img)
+    cv2.imshow("Cropped Isolated", cropped_isolated)
+    cv2.imshow("Binary Cropped", binary_cropped)
+    cv2.imshow("Grid classification", grid_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 cell_size = grid_img.shape[0] // rows  # assuming square cells; same as height / rows
@@ -81,24 +86,32 @@ numbers = identify_numbers(
     cols=cols,
     border_thickness=border_thickness,
     grid=grid,
-    debug=True,
-    hardcode=True,
-    ocr=False,
+    debug=False,
+    hardcode=False,
     save=False
 )
 
-if solve_full:
-    hints = ""
+print(numbers)
+if solve:
+    with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
+        hints = json.load(f)
+
     final_hints = compute_lengths_and_intersections(grid, numbers, hints)
     # print(final_hints)
 
 
     print("JSON Result: ")
-    # solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
-    solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5")
+    if use_solver == "huggingface":
+        solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
+    elif use_solver == "github":
+        solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5")
+    elif use_solver == "gemini":
+        solver = GeminiSolver(final_hints)
+    else:
+        raise ValueError("Invalid solver type specified")
+
     result = solver.solve()
     print(result)
-
     # for dummy
     solved_img, conflict = overlay_grid(cropped_isolated, grid, numbers, final_hints, result)
     print("Conflict: ", conflict)

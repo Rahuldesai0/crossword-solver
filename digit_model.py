@@ -1,92 +1,111 @@
-import cv2 
-import torch 
-import numpy as np 
+import cv2
+import torch
+import numpy as np
 from ocr import ocr_image
+import os
+from skimage.morphology import skeletonize
 
-model_choice = 1  # set 1 or 2
+# copied same function for debugging
+def preprocess_digit(img_bin, digit_size=28, final_size=(28, 56), sharpen=True, skeletonize_digit=True, debug=False):
+    img = img_bin.copy()
 
-model = None
-try:
-    if model_choice == 1:
-        from two_digit_classifier.model3.two_digit.model import CNN
-        model = CNN(num_classes=100)
-        model_path = './two_digit_classifier/model3/two_digit/model_combined.pth'
-    elif model_choice == 2:
-        from two_digit_classifier.model2.two_digit.model import CNN
-        model = CNN(num_classes=100)
-        model_path = './two_digit_classifier/model2/two_digit/model1.pth'
-    else:
-        raise ValueError("Invalid model_choice. Use 1 or 2.")
-
-    model.load_state_dict(torch.load(model_path, map_location='cpu'))
-    model.eval()
-except Exception as e:
-    print("Warning: could not load model")
-    print(f"Model load error: {e}")
-    exit(-1)
+    if len(img.shape) == 3:  # convert BGR to grayscale
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-def predict_image(img_np, min_size=10, ocr=False):
+    if img.max() > 1 and img.max() <= 255:
+        _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+
+    coords = cv2.findNonZero(img)
+    if coords is None:
+        return np.zeros(final_size, dtype=np.uint8)
+
+    x, y, w, h = cv2.boundingRect(coords)
+    digit = img[y:y+h, x:x+w]
+
+    size = max(w, h)
+    square = np.zeros((size, size), dtype=np.uint8)
+    x_off = (size - w) // 2
+    y_off = (size - h) // 2
+    square[y_off:y_off+h, x_off:x_off+w] = digit
+
+    resized = cv2.resize(square, (digit_size, digit_size), interpolation=cv2.INTER_AREA)
+
+    # Erosion to remove very small isolated pixels
+    kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+    eroded = cv2.erode(resized, kernel_erode, iterations=1)
+
+    # Morphological closing to fill small holes
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+    morphed = cv2.morphologyEx(eroded, cv2.MORPH_CLOSE, kernel_close)
+
+    if sharpen:
+        kernel_sharp = np.array([[0,-1,0], [-1,5,-1], [0,-1,0]], dtype=np.float32)
+        morphed = cv2.filter2D(morphed, -1, kernel_sharp)
+        morphed = np.clip(morphed, 0, 255).astype(np.uint8)
+
+    if skeletonize_digit:
+        bool_img = morphed > 0
+        skeleton = skeletonize(bool_img)
+        morphed = (skeleton.astype(np.uint8) * 255)
+
+        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+        morphed = cv2.dilate(morphed, kernel_dilate, iterations=2)
+
+    final = np.zeros(final_size, dtype=np.uint8)
+    x_pad = (final_size[1] - digit_size) // 2
+    final[:, x_pad:x_pad+digit_size] = morphed
+
+    if debug:
+        print(f"preprocess_digit: orig {img_bin.shape}, bbox {(w,h)}, digit_size {digit_size}, final_size {final_size}")
+
+    return final
+
+class DigitModel:
+    def __init__(self, model_choice=2, device='cpu'):
+        self.device = device
+        self.model = None
+
+        if model_choice == 1:
+            from two_digit_classifier.model3.two_digit.model import CNN
+            self.model = CNN(num_classes=100)
+            model_path = './two_digit_classifier/model3/two_digit/model_combined.pth'
+        elif model_choice == 2:
+            from two_digit_classifier.model2.two_digit.model import CNN
+            self.model = CNN(num_classes=100)
+            model_path = './two_digit_classifier/model2/two_digit/model1.pth'
+        else:
+            raise ValueError("Invalid model_choice. Use 1 or 2.")
+
+        self.model.load_state_dict(torch.load(model_path, map_location=device))
+        self.model.eval()
+
+    def predict(self, img_tensor, top_k=5):
+        with torch.no_grad():
+            outputs = self.model(img_tensor.to(self.device))
+            _, indices = torch.topk(outputs, k=top_k, dim=1)
+        return indices[0].cpu().tolist()
+
+model_instance = DigitModel(model_choice=2)
+
+def predict_image(img_np, min_size=10, ocr=False, save_path=None):
+    img_np = preprocess_digit(img_np)
+    
+    if save_path:
+        cv2.imwrite(save_path, img_np)
+    
     if ocr:
-        text, data, img = ocr_image(img_np)
-        return text
+        return img_np
 
-    target_h = 28
-    target_w = 28
+    img_tensor = torch.from_numpy(img_np).unsqueeze(0).unsqueeze(0).float() / 255.0
 
-    # Convert to grayscale if needed
-    if len(img_np.shape) == 3 and img_np.shape[2] == 3:
-        img_gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
-    else:
-        img_gray = img_np.copy()
-
-    # Slightly blur to reduce noise
-    img_blur = cv2.GaussianBlur(img_gray, (3, 3), 0)
-
-    # Threshold to get binary image
-    _, img_thresh = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    # Find contours
-    contours, _ = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if len(contours) == 0:
-        # No digit found, fallback to center crop
-        h, w = img_gray.shape
-        crop = img_gray[2:h-2, 2:w-2]
-    else:
-        # Get bounding box around all contours (union)
-        x_min = min([cv2.boundingRect(c)[0] for c in contours])
-        y_min = min([cv2.boundingRect(c)[1] for c in contours])
-        x_max = max([cv2.boundingRect(c)[0] + cv2.boundingRect(c)[2] for c in contours])
-        y_max = max([cv2.boundingRect(c)[1] + cv2.boundingRect(c)[3] for c in contours])
-
-        # Crop with a small margin (2-3 pixels)
-        x_min = max(0, x_min - 2)
-        y_min = max(0, y_min - 2)
-        x_max = min(img_gray.shape[1], x_max + 2)
-        y_max = min(img_gray.shape[0], y_max + 2)
-
-        crop = img_gray[y_min:y_max, x_min:x_max]
-
-    # Resize to model input
-    img_resized = cv2.resize(crop, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-    img_arr = img_resized.astype(np.float32) / 255.0  # normalize if your model expects
-
-    print("Image size going to model: ", img_arr.shape)
-    cv2.imshow("To model", img_arr)
-
-    img_tensor = torch.tensor(img_arr).unsqueeze(0).unsqueeze(0)
-
-    with torch.no_grad():
-        outputs = model(img_tensor)
-        values, indices = torch.topk(outputs, k=5, dim=1)
-
-    return indices[0].cpu().tolist()
+    return model_instance.predict(img_tensor)
 
 
 if __name__ == '__main__':
     img = cv2.imread("./cells/cell_0_0.png")
-    digit = predict_image(img)
-    print(digit)
-    cv2.imshow("Cell", img)
+    digits = predict_image(img, save_path="./processed_cells/cell_0_0_processed.png")
+    print("Predicted digits:", digits)
+
+    cv2.imshow("Processed Digit", preprocess_digit(img))
     cv2.waitKey(0)
     cv2.destroyAllWindows()

@@ -46,6 +46,7 @@ class GitHubModelSolver(CrosswordSolverModel):
 
         result = response.json()
         content = result["choices"][0]["message"]["content"]
+        content = self.remove_backticks(content)
 
         try:
             # Attempt to parse JSON if model returned a JSON string

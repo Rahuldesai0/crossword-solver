@@ -1,6 +1,9 @@
 def compute_lengths_and_intersections(grid, numbers, hints):
     rows, cols = len(grid), len(grid[0])
 
+    # Convert hints and numbers keys to int
+    hints = {int(k): v for k, v in hints.items()}
+
     def get_length_and_coords(start, direction):
         r, c = start
         coords = []

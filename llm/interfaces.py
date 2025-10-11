@@ -14,6 +14,15 @@ class CrosswordSolverModel(ABC):
             f"Here is the crossword puzzle input:\n```json\n{self.input_json}\n```\n"
         )
 
+    def remove_backticks(self, text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text.replace("json", "", 1).strip()
+            if text.endswith("```"):
+                text = text[:-3].strip()
+        return text
+
     @abstractmethod
     def solve(self):
         pass

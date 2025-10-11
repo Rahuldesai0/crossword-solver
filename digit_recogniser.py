@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 from ocr import ocr_image
-from digit_model import predict_image
+from digit_model_v2 import detect_digit_with_preprocessing
 
 
 def identify_numbers(
@@ -14,10 +14,9 @@ def identify_numbers(
     grid,
     debug=False,
     hardcode=False,
-    ocr=False,
     save=False
 ):
-    pass
+    print("Identifying numbers....")
 
     height, width = cropped_img.shape[:2]
     import os 
@@ -59,11 +58,6 @@ def identify_numbers(
                 cell_filename = os.path.join(save_dir, f"cell_{i}_{j}.png")
                 cv2.imwrite(cell_filename, binary_cell)
 
-            if ocr:
-                text = predict_image(binary_cell, ocr=ocr)
-                print("Text result from OCR: ", text)
-                return 
-
             # Remove white border by cropping to digit bounding box
             coords = cv2.findNonZero(binary_cell)
             if coords is not None:
@@ -75,48 +69,53 @@ def identify_numbers(
                     print(f"Empty cell at ({i}, {j}) - no nonzero pixels")
                 continue
 
-            if w_ < cell_size//2 and h_ < cell_size//2:
+            # if w_ < cell_size//2 and h_ < cell_size//2:
 
-                # Small padding so strokes aren’t cut
-                padding = 3
-                x_start = max(0, x_)
-                y_start = max(0, y_)
-                x_end = min(binary_cell.shape[1], x_ + w_ )
-                y_end = min(binary_cell.shape[0], y_ + h_ )
+            # Small padding so strokes aren’t cut
+            padding = 3
+            x_start = max(0, x_)
+            y_start = max(0, y_)
+            x_end = min(binary_cell.shape[1], x_ + w_ )
+            y_end = min(binary_cell.shape[0], y_ + h_ )
 
-                digit_crop = binary_cell[y_start:y_end, x_start:x_end]
-                digit_crop = cv2.copyMakeBorder(
-                    digit_crop,
-                    top=padding,
-                    bottom=padding,
-                    left=padding,
-                    right=padding,
-                    borderType=cv2.BORDER_CONSTANT,
-                    value=0
-                )
+            digit_crop = binary_cell[y_start:y_end, x_start:x_end]
+            digit_crop = cv2.copyMakeBorder(
+                digit_crop,
+                top=padding,
+                bottom=padding,
+                left=padding,
+                right=padding,
+                borderType=cv2.BORDER_CONSTANT,
+                value=0
+            )
 
-                processed = preprocess_digit(digit_crop, digit_size=32, final_size=(32, 32), debug=debug)
-                digit = predict_image(processed)
+            # processed = preprocess_digit(digit_crop, digit_size=32, final_size=(32, 32), debug=debug)
+            digit = detect_digit_with_preprocessing(digit_crop)
 
-                if debug:
-                    # cv2.imshow("Original Cell", cell)
-                    # cv2.imshow("Binary Cell", binary_cell)
-                    cv2.imshow("Cropped Digit", digit_crop)
-                    cv2.imshow("Processed Digit (16x16)", processed)
-                    print(f"Digit size: {digit_crop.shape}")
-                    print(f"Digit at cell ({i}, {j}) detected: {digit}")
-                    cv2.waitKey(0)
-                    cv2.destroyAllWindows()
-                
-                result[(i, j)] = digit[0]
-
-            else:
-                if debug:
-                    print(f"Empty cell at ({i}, {j})")
-                    cv2.imshow("Original Cell", cell)
-                    cv2.imshow("Empty Cell", binary_cell)
-                    cv2.waitKey(0)
-                    cv2.destroyAllWindows()
+            if debug:
+                # cv2.imshow("Original Cell", cell)
+                # cv2.imshow("Binary Cell", binary_cell)
+                cv2.imshow("Cropped Digit", digit_crop)
+                print(f"Digit size: {digit_crop.shape}")
+                print(f"Digit at cell ({i}, {j}) detected: {digit}")
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            
+            if digit is not None:
+                if isinstance(digit, str):
+                    digit = int(digit)
+                    result[digit] = (i, j)
+                elif isinstance(digit, int):
+                    result[digit] = (i, j)
+                elif isinstance(digit, list):
+                    result[digit[0]] = (i, j)
+            # else:
+            #     if debug:
+            #         print(f"Empty cell at ({i}, {j})")
+            #         cv2.imshow("Original Cell", cell)
+            #         cv2.imshow("Empty Cell", binary_cell)
+            #         cv2.waitKey(0)
+            #         cv2.destroyAllWindows()
 
 
     if hardcode:
