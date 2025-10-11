@@ -7,11 +7,13 @@ from llm.solvers import GitHubModelSolver, HuggingFaceModelSolver, GeminiSolver
 from overlay_grid import overlay_grid
 import json
 
-solve = True
-debug = False
+path = input("Enter path: ")
+solve = True if input("Solve? (yes/no): ") == 'yes' else False
+debugGrid = True if input("Debug grid? (yes/no): ") == 'yes' else False
+debugNumbers = True if input("Debug numbers? (yes/no): ") == 'yes' else False
+if solve:
+    use_solver = input("Which solver?: ")
 
-path = "test/img3.jpg"
-use_solver = "github"
 img = cv2.imread(path)
 if img is None:
     print("Error loading image.")
@@ -63,11 +65,11 @@ print("Estimated Border Thickness:", border_thickness)
 grid_img, grid, cell_w_ind, cell_h_ind = classify_grid(cropped_isolated, rows, cols, debug=True, resize=None)
 print(len(grid_img), len(grid_img[0]))
 
-for r in grid:
-    print(r)
-0
+
 # Show images
-if debug:
+if debugGrid:
+    for r in grid:
+        print(r)
     cv2.imshow("Original", img)
     cv2.imshow("Cropped Isolated", cropped_isolated)
     cv2.imshow("Binary Cropped", binary_cropped)
@@ -86,12 +88,13 @@ numbers = identify_numbers(
     cols=cols,
     border_thickness=border_thickness,
     grid=grid,
-    debug=False,
+    debug=debugNumbers,
     hardcode=False,
     save=False
 )
 
 print(numbers)
+print(f"Identified: {len(numbers)} numbers")
 if solve:
     with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
         hints = json.load(f)
@@ -104,7 +107,7 @@ if solve:
     if use_solver == "huggingface":
         solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
     elif use_solver == "github":
-        solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5")
+        solver = GitHubModelSolver(final_hints, model_name="openai/gpt-4o")
     elif use_solver == "gemini":
         solver = GeminiSolver(final_hints)
     else:

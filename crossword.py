@@ -11,11 +11,11 @@ model_choice = 1  # set 1 or 2
 model = None
 try:
     if model_choice == 1:
-        from two_digit_classifier.model3.two_digit.model import CNN
+        from two_digit_CNN_classifier.model3.two_digit.model import CNN
         model = CNN(num_classes=100)
         model_path = './two_digit_classifier/model3/two_digit/model_combined.pth'
     elif model_choice == 2:
-        from two_digit_classifier.model2.two_digit.model import CNN
+        from two_digit_CNN_classifier.model2.two_digit.model import CNN
         model = CNN(num_classes=100)
         model_path = './two_digit_classifier/model2/two_digit/model1.pth'
     else:
