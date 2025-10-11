@@ -4,3 +4,6 @@
 /two_digit_classifier/model2/1digit/test_images
 /two_digit_classifier/model2/2digit/model1.pth
 /two_digit_classifier/model2/1digit/model1_1digit.pth
+__pycache__/
+*.pyc
+*.pyo
