@@ -35,10 +35,6 @@ def detect_digit_with_preprocessing(img, border_crop=10):
         # Apply binary inversion threshold
         _, thresh = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY_INV)
 
-        # Optional: small dilation
-        kernel = np.ones((1, 1), np.uint8)
-        processed_img = cv2.dilate(thresh, kernel, iterations=1)
-
         # Save processed image for debugging
         # output_path = "processed_for_tesseract.png"
         # cv2.imwrite(output_path, processed_img)
@@ -46,7 +42,7 @@ def detect_digit_with_preprocessing(img, border_crop=10):
 
         # Tesseract config: single character, digits only
         custom_config = r'--psm 10 -c tessedit_char_whitelist=0123456789'
-        pil_image = Image.fromarray(processed_img)
+        pil_image = Image.fromarray(thresh)
         text = pytesseract.image_to_string(pil_image, config=custom_config)
 
         detected_digit = text.strip()

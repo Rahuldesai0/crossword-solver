@@ -11,6 +11,7 @@ path = input("Enter path: ")
 solve = True if input("Solve? (yes/no): ") == 'yes' else False
 debugGrid = True if input("Debug grid? (yes/no): ") == 'yes' else False
 debugNumbers = True if input("Debug numbers? (yes/no): ") == 'yes' else False
+border_crop=10
 if solve:
     use_solver = input("Which solver?: ")
 
@@ -90,7 +91,8 @@ numbers = identify_numbers(
     grid=grid,
     debug=debugNumbers,
     hardcode=False,
-    save=False
+    save=False,
+    border_crop=border_crop
 )
 
 print(numbers)

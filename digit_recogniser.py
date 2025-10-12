@@ -2,12 +2,12 @@ import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 from ocr import ocr_image
-from digit_classifiers.digit_model_v2 import detect_digit_with_preprocessing
+from digit_classifiers.digit_model_v2 import detect_digit_with_preprocessing as detect_number_v2
 from digit_classifiers.digit_model_v3 import detect_number_v3
 from digit_classifiers.digit_model_v4 import detect_number_v4
 from digit_classifiers.digit_model_multi import detect_multi_digit_high_threshold
 
-detect = detect_number_v4
+detect = detect_number_v2
 
 def identify_numbers(
     cropped_img,
@@ -18,7 +18,8 @@ def identify_numbers(
     grid,
     debug=False,
     hardcode=False,
-    save=False
+    save=False,
+    border_crop=0
 ):
     print("Identifying numbers....")
 
@@ -99,7 +100,7 @@ def identify_numbers(
             )
 
             # processed = preprocess_digit(digit_crop, digit_size=32, final_size=(32, 32), debug=debug)
-            digit = detect(digit_crop, border_crop=10)
+            digit = detect(digit_crop, border_crop=border_crop)
 
             if debug:
                 # cv2.imshow("Original Cell", cell)

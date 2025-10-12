@@ -22,7 +22,7 @@ def detect_number_v4(img_array, border_crop=0):
             img_array = img_array[border_crop:h-border_crop, border_crop:w-border_crop]
 
         # Convert to grayscale if image has 3 channels
-        if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+        if len(img_array.shape) == 3:
             gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
         else:
             gray = img_array.copy()
@@ -30,11 +30,13 @@ def detect_number_v4(img_array, border_crop=0):
         height, width = gray.shape
 
         # --- 1. Border Trim and Upscaling ---
-        x_start, y_start = 2, 2
-        borderless_gray = gray[y_start:, x_start:]
+        # x_start, y_start = 2, 2
+        # borderless_gray = gray[y_start:, x_start:]
 
-        scale_factor = 3
-        resized_img = cv2.resize(borderless_gray, None,
+        # _, thresh = cv2.threshold(gray, 128, 255, cv2.THRESH_BINARY_INV)
+
+        scale_factor = 4
+        resized_img = cv2.resize(gray, None,
                                  fx=scale_factor, fy=scale_factor,
                                  interpolation=cv2.INTER_CUBIC)
 
@@ -43,9 +45,6 @@ def detect_number_v4(img_array, border_crop=0):
         closed_img = cv2.morphologyEx(resized_img, cv2.MORPH_CLOSE, kernel)
         _, processed_img = cv2.threshold(closed_img, 127, 255, cv2.THRESH_BINARY)
 
-        processed_img = cv2.GaussianBlur(processed_img, ksize=(3, 3), sigmaX=0)
-        processed_img = cv2.GaussianBlur(processed_img, ksize=(3, 3), sigmaX=0)
-
         sharpen_kernel = np.array([[0, -1, 0],
                                    [-1, 5, -1],
                                    [0, -1, 0]])
@@ -53,7 +52,7 @@ def detect_number_v4(img_array, border_crop=0):
         processed_img = cv2.filter2D(processed_img, -1, sharpen_kernel)
         processed_img = cv2.filter2D(processed_img, -1, sharpen_kernel)
 
-        dilate_kernel = np.ones((2, 2), np.uint8) 
+        dilate_kernel = np.ones((3,3), np.uint8) 
         processed_img = cv2.dilate(processed_img, dilate_kernel, iterations=1)
 
         # cv2.imshow("To OCR", processed_img)
@@ -67,6 +66,7 @@ def detect_number_v4(img_array, border_crop=0):
 
         # --- 4. Post-processing ---
         detected_number = ''.join(filter(str.isdigit, text))
+        detected_number = detected_number[:2]       # only first 2 digits required
         # print("Found: ", detected_number)
 
         if detected_number:
