@@ -11,3 +11,9 @@
 /two_digit_CNN_classifier/model2/two_digit/model1.pth
 /cells
 /cells_processed
+
+*.pth
+*.pyc
+__pycache__/
+*.pkl
+*.csv
