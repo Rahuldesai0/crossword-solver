@@ -1,0 +1,5 @@
+numpy>=1.25.0
+opencv-python>=4.8.0
+scikit-image>=1.1.0
+torch>=2.1.0
+pytesseract>=0.3.12

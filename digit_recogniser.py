@@ -6,6 +6,8 @@ from digit_classifiers.digit_model_v2 import detect_digit_with_preprocessing as 
 from digit_classifiers.digit_model_v3 import detect_number_v3
 from digit_classifiers.digit_model_v4 import detect_number_v4
 from digit_classifiers.digit_model_multi import detect_multi_digit_high_threshold
+import os 
+import concurrent.futures
 
 detect = detect_number_v2
 
@@ -24,112 +26,66 @@ def identify_numbers(
     print("Identifying numbers....")
 
     height, width = cropped_img.shape[:2]
-    import os 
-
     result = {}
+
     save_dir = "cells"
     if save and not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
     cell_size -= border_thickness / 4
-    for i in range(rows):
-        for j in range(cols):
-            if grid and grid[i][j] == 0:
-                continue  # skip this cell
 
-            # Extract cell from full image
-            x = j * cell_size
-            y = i * cell_size
-            w = cell_size
-            h = cell_size
+    def process_cell(i, j):
+        if grid and grid[i][j] == 0:
+            return None
 
-            if x + w > width or y + h > height:
-                continue  # out of bounds
+        x = j * cell_size
+        y = i * cell_size
+        w = h = cell_size
 
-            cell = cropped_img[int(y+border_thickness*1.5):int(y+h), int(x+border_thickness*1.5):int(x+w)]
+        if x + w > width or y + h > height:
+            return None
 
-            # h_cell, w_cell = cell.shape[:2]
-            # cropped_w = int(w_cell * 0.45)
-            # cropped_h = int(h_cell * 0.32)
-            # cell = cell[0:cropped_h, 0:cropped_w]
+        cell = cropped_img[int(y+border_thickness*1.5):int(y+h), int(x+border_thickness*1.5):int(x+w)]
+        gray_cell = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY) if len(cell.shape) == 3 else cell.copy()
+        _, binary_cell = cv2.threshold(gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-            # Convert to grayscale if needed
-            if len(cell.shape) == 3:
-                gray_cell = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
-            else:
-                gray_cell = cell.copy()
+        if save:
+            cv2.imwrite(os.path.join(save_dir, f"cell_{i}_{j}.png"), binary_cell)
 
-            # Threshold to binary (invert so digit is white)
-            _, binary_cell = cv2.threshold(
-                gray_cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-            )
-
-            if save:
-                cell_filename = os.path.join(save_dir, f"cell_{i}_{j}.png")
-                cv2.imwrite(cell_filename, binary_cell)
-
-            # Remove white border by cropping to digit bounding box
-            coords = cv2.findNonZero(binary_cell)
-            if coords is not None:
-                c = cv2.boundingRect(coords)
-                x_, y_, w_, h_ = c
-            else:
-                # nothing found in this cell
-                if debug:
-                    print(f"Empty cell at ({i}, {j}) - no nonzero pixels")
-                continue
-
-            # if w_ < cell_size//2 and h_ < cell_size//2:
-
-            # Small padding so strokes aren’t cut
-            padding = 3
-            x_start = max(0, x_)
-            y_start = max(0, y_)
-            x_end = min(binary_cell.shape[1], x_ + w_ )
-            y_end = min(binary_cell.shape[0], y_ + h_ )
-
-            digit_crop = binary_cell[y_start:y_end, x_start:x_end]
-            digit_crop = cv2.copyMakeBorder(
-                digit_crop,
-                top=padding,
-                bottom=padding,
-                left=padding,
-                right=padding,
-                borderType=cv2.BORDER_CONSTANT,
-                value=0
-            )
-
-            # processed = preprocess_digit(digit_crop, digit_size=32, final_size=(32, 32), debug=debug)
-            digit = detect(digit_crop, border_crop=border_crop)
-
+        coords = cv2.findNonZero(binary_cell)
+        if coords is None:
             if debug:
-                # cv2.imshow("Original Cell", cell)
-                # cv2.imshow("Binary Cell", binary_cell)
-                cv2.imshow("Cropped Digit", digit_crop)
-                print(f"Digit size: {digit_crop.shape}")
-                print(f"Digit at cell ({i}, {j}) detected: {digit}")
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-            
-            if digit is not None:
-                if isinstance(digit, str):
-                    digit = int(digit)
-                    result[digit] = (i, j)
-                elif isinstance(digit, int):
-                    result[digit] = (i, j)
-                elif isinstance(digit, list):
-                    result[digit[0]] = (i, j)
-            # else:
-            #     if debug:
-            #         print(f"Empty cell at ({i}, {j})")
-            #         cv2.imshow("Original Cell", cell)
-            #         cv2.imshow("Empty Cell", binary_cell)
-            #         cv2.waitKey(0)
-            #         cv2.destroyAllWindows()
+                print(f"Empty cell at ({i},{j})")
+            return None
 
+        x_, y_, w_, h_ = cv2.boundingRect(coords)
+        padding = 3
+        digit_crop = binary_cell[y_:y_+h_, x_:x_+w_]
+        digit_crop = cv2.copyMakeBorder(digit_crop, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
+
+        digit = detect(digit_crop, border_crop=border_crop)
+
+        if debug and digit is not None:
+            cv2.imshow("Cropped Digit", digit_crop)
+            print(f"Digit at cell ({i},{j}) detected: {digit}")
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+        if digit is not None:
+            if isinstance(digit, list):
+                digit = digit[0]
+            return digit, (i, j)
+        return None
+
+    # Run cells in parallel using threads
+    args = [(i, j) for i in range(rows) for j in range(cols)]
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for res in executor.map(lambda p: process_cell(*p), args):
+            if res is not None:
+                digit, pos = res
+                result[digit] = pos
 
     if hardcode:
-        # results for img1.jpg
         return {
             1:(0,0), 2:(0,1), 3:(0,2), 4:(0,3), 5:(0,4), 6:(0,5), 7:(0,7), 8:(0,8), 9:(0,9),
             10:(1,0), 11:(1,7), 12:(2,0), 13:(2,6), 14:(3,0), 15:(3,5), 16:(4,4),
@@ -137,7 +93,7 @@ def identify_numbers(
             26:(7,0), 27:(7,5), 28:(8,0), 29:(8,4), 30:(9,0), 31:(9,4)
         }
 
-    return result    
+    return result
 
 def preprocess_digit(img_bin, digit_size=28, final_size=(28, 56), sharpen=True, skeletonize_digit=True, debug=False):
     img = img_bin.copy()
