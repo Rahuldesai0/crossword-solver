@@ -1,11 +1,13 @@
 import cv2
 import numpy as np
 from grid_classifier import preProcess, estimate_cell_size, estimate_border_thickness, classify_grid
-from digit_recogniser import identify_numbers
-from generate_json import compute_lengths_and_intersections
+from digit_recogniser import identify_numbers_parallel, identify_numbers_serial, identify_numbers_serial_v2, identify_numbers_parallel_v2
+from generate_json import compute_lengths_and_intersections, compute_lengths_and_intersections_parallel
 from llm.solvers import GitHubModelSolver, HuggingFaceModelSolver, GeminiSolver
-from overlay_grid import overlay_grid
+from overlay_grid import overlay_grid, overlay_grid_parallel
 import json
+
+import time 
 
 path = input("Enter path: ")
 solve = True if input("Solve? (yes/no): ") == 'yes' else False
@@ -82,7 +84,8 @@ if debugGrid:
 cell_size = grid_img.shape[0] // rows  # assuming square cells; same as height / rows
 border_thickness = 2  # adjust if needed
 
-numbers = identify_numbers(
+start_time = time.time()
+numbers = identify_numbers_parallel(
     cropped_img=cropped_isolated,
     cell_size=cell_size,
     rows=rows,
@@ -94,18 +97,25 @@ numbers = identify_numbers(
     save=False,
     border_crop=border_crop
 )
+end_time = time.time()
+print(f"identify_numbers took {end_time - start_time:.4f} seconds")
 
 print(numbers)
 print(f"Identified: {len(numbers)} numbers")
+numbers = {str(k): v for k, v in numbers.items()}
+
+with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
+    hints = json.load(f)
+
+hints = {str(k): v for k, v in hints.items()}
+# Step 2: Compute lengths and intersections
+start_time = time.time()
+final_hints = compute_lengths_and_intersections(grid, numbers, hints)
+end_time = time.time()
+print(f"compute_lengths_and_intersections took {end_time - start_time:.4f} seconds")
+print(final_hints)
+
 if solve:
-    with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
-        hints = json.load(f)
-
-    final_hints = compute_lengths_and_intersections(grid, numbers, hints)
-    # print(final_hints)
-
-
-    print("JSON Result: ")
     if use_solver == "huggingface":
         solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
     elif use_solver == "github":
@@ -115,14 +125,16 @@ if solve:
     else:
         raise ValueError("Invalid solver type specified")
 
+    # For testing
     result = solver.solve()
-    print(result)
-    # for dummy
+
+    # Step 3: Overlay grid
+    start_time = time.time()
     solved_img, conflict = overlay_grid(cropped_isolated, grid, numbers, final_hints, result)
+    end_time = time.time()
+    print(f"overlay_grid took {end_time - start_time:.4f} seconds")
+
     print("Conflict: ", conflict)
     cv2.imshow("Solved Crossword", solved_img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
     cv2.waitKey(0)
     cv2.destroyAllWindows()

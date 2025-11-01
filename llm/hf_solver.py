@@ -21,7 +21,6 @@ class HuggingFaceModelSolver(CrosswordSolverModel):
         self.model_name = model_name
 
     def solve(self):
-        print("Solving with Hugging Face Chat API...")
 
         payload = {
             "model": self.model_name,

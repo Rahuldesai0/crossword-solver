@@ -36,10 +36,7 @@ class GitHubModelSolver(CrosswordSolverModel):
             ]
         }
 
-        start_time = time.time()
         response = requests.post(url, headers=headers, json=data)
-        elapsed = time.time() - start_time
-        print(f"Request completed in {elapsed:.2f} seconds, status code: {response.status_code}")
 
         if response.status_code != 200:
             raise RuntimeError(f"GitHub API error {response.status_code}: {response.text}")

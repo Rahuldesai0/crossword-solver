@@ -1,0 +1,94 @@
+{
+    "1": {
+        "across": {
+            "hint": "Argues about petty matters",
+            "length": 7,
+            "intersections": [
+                [2, "down", [0, 2]],
+                [3, "down", [0, 4]],
+                [4, "down", [0, 6]]
+            ]
+        },
+        "down": {
+            "hint": "Scottish village hosting the Highland Games",
+            "length": 7,
+            "intersections": [
+                [5, "across", [2, 0]],
+                [6, "across", [4, 0]],
+                [7, "across", [6, 0]]
+            ]
+        }
+    },
+    "2": {
+        "down": {
+            "hint": "Deletes marks with intersecting lines",
+            "length": 7,
+            "intersections": [
+                [1, "across", [0, 2]],
+                [5, "across", [2, 2]],
+                [6, "across", [4, 2]],
+                [7, "across", [6, 2]]
+            ]
+        }
+    },
+    "3": {
+        "down": {
+            "hint": "A metier",
+            "length": 7,
+            "intersections": [
+                [1, "across", [0, 4]],
+                [5, "across", [2, 4]],
+                [6, "across", [4, 4]],
+                [7, "across", [6, 4]]
+            ]
+        }
+    },
+    "4": {
+        "down": {
+            "hint": "Prime ___, TV police series starring Helen Mirren",
+            "length": 7,
+            "intersections": [
+                [1, "across", [0, 6]],
+                [5, "across", [2, 6]],
+                [6, "across", [4, 6]],
+                [7, "across", [6, 6]]
+            ]
+        }
+    },
+    "5": {
+        "across": {
+            "hint": "Extreme pains",
+            "length": 7,
+            "intersections": [
+                [1, "down", [2, 0]],
+                [2, "down", [2, 2]],
+                [3, "down", [2, 4]],
+                [4, "down", [2, 6]]
+            ]
+        }
+    },
+    "6": {
+        "across": {
+            "hint": "Tamper with kneading of the body",
+            "length": 7,
+            "intersections": [
+                [1, "down", [4, 0]],
+                [2, "down", [4, 2]],
+                [3, "down", [4, 4]],
+                [4, "down", [4, 6]]
+            ]
+        }
+    },
+    "7": {
+        "across": {
+            "hint": "He's star (Result is an anagram of this)",
+            "length": 7,
+            "intersections": [
+                [1, "down", [6, 0]],
+                [2, "down", [6, 2]],
+                [3, "down", [6, 4]],
+                [4, "down", [6, 6]]
+            ]
+        }
+    }
+}
