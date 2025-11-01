@@ -7,11 +7,6 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 
 def detect_number_v5(img_array, border_crop=0):
     try:
-        import cv2
-        import numpy as np
-        from PIL import Image
-        import pytesseract
-        cv2.imshow("To input", img_array)
 
         if img_array is None:
             print("Error: Input image array is None")

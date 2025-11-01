@@ -11,7 +11,58 @@ import os
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-detect = detect_number_v4
+detect = detect_number_v2
+
+
+def preprocess_digit(img_bin, digit_size=28, final_size=(28, 56), sharpen=True, skeletonize_digit=True, debug=False):
+    img = img_bin.copy()
+    if img.max() > 1 and img.max() <= 255:
+        _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+
+    coords = cv2.findNonZero(img)
+    if coords is None:
+        return np.zeros(final_size, dtype=np.uint8)
+
+    x, y, w, h = cv2.boundingRect(coords)
+    digit = img[y:y+h, x:x+w]
+
+    size = max(w, h)
+    square = np.zeros((size, size), dtype=np.uint8)
+    x_off = (size - w) // 2
+    y_off = (size - h) // 2
+    square[y_off:y_off+h, x_off:x_off+w] = digit
+
+    resized = cv2.resize(square, (digit_size, digit_size), interpolation=cv2.INTER_AREA)
+
+    # Erosion to remove very small isolated pixels
+    kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+    eroded = cv2.erode(resized, kernel_erode, iterations=1)
+
+    # Morphological closing to fill small holes
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+    morphed = cv2.morphologyEx(eroded, cv2.MORPH_CLOSE, kernel_close)
+
+    if sharpen:
+        kernel_sharp = np.array([[0,-1,0], [-1,5,-1], [0,-1,0]], dtype=np.float32)
+        morphed = cv2.filter2D(morphed, -1, kernel_sharp)
+        morphed = np.clip(morphed, 0, 255).astype(np.uint8)
+
+    if skeletonize_digit:
+        bool_img = morphed > 0
+        skeleton = skeletonize(bool_img)
+        morphed = (skeleton.astype(np.uint8) * 255)
+
+        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
+        morphed = cv2.dilate(morphed, kernel_dilate, iterations=2)
+
+    final = np.zeros(final_size, dtype=np.uint8)
+    x_pad = (final_size[1] - digit_size) // 2
+    final[:, x_pad:x_pad+digit_size] = morphed
+
+    if debug:
+        print(f"preprocess_digit: orig {img_bin.shape}, bbox {(w,h)}, digit_size {digit_size}, final_size {final_size}")
+
+    return final
 
 def identify_numbers_parallel(
     cropped_img,
@@ -226,56 +277,6 @@ def identify_numbers_serial(
         }
 
     return result    
-
-def preprocess_digit(img_bin, digit_size=28, final_size=(28, 56), sharpen=True, skeletonize_digit=True, debug=False):
-    img = img_bin.copy()
-    if img.max() > 1 and img.max() <= 255:
-        _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-
-    coords = cv2.findNonZero(img)
-    if coords is None:
-        return np.zeros(final_size, dtype=np.uint8)
-
-    x, y, w, h = cv2.boundingRect(coords)
-    digit = img[y:y+h, x:x+w]
-
-    size = max(w, h)
-    square = np.zeros((size, size), dtype=np.uint8)
-    x_off = (size - w) // 2
-    y_off = (size - h) // 2
-    square[y_off:y_off+h, x_off:x_off+w] = digit
-
-    resized = cv2.resize(square, (digit_size, digit_size), interpolation=cv2.INTER_AREA)
-
-    # Erosion to remove very small isolated pixels
-    kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
-    eroded = cv2.erode(resized, kernel_erode, iterations=1)
-
-    # Morphological closing to fill small holes
-    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
-    morphed = cv2.morphologyEx(eroded, cv2.MORPH_CLOSE, kernel_close)
-
-    if sharpen:
-        kernel_sharp = np.array([[0,-1,0], [-1,5,-1], [0,-1,0]], dtype=np.float32)
-        morphed = cv2.filter2D(morphed, -1, kernel_sharp)
-        morphed = np.clip(morphed, 0, 255).astype(np.uint8)
-
-    if skeletonize_digit:
-        bool_img = morphed > 0
-        skeleton = skeletonize(bool_img)
-        morphed = (skeleton.astype(np.uint8) * 255)
-
-        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2,2))
-        morphed = cv2.dilate(morphed, kernel_dilate, iterations=2)
-
-    final = np.zeros(final_size, dtype=np.uint8)
-    x_pad = (final_size[1] - digit_size) // 2
-    final[:, x_pad:x_pad+digit_size] = morphed
-
-    if debug:
-        print(f"preprocess_digit: orig {img_bin.shape}, bbox {(w,h)}, digit_size {digit_size}, final_size {final_size}")
-
-    return final
 
 def identify_numbers_serial_v2(
     cropped_img,

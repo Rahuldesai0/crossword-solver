@@ -47,19 +47,58 @@ def solve_in_parallel(input_json: str, solvers_and_models: List[Tuple[str, str]]
     return results
 
 
-def pick_best_result(results: Dict[str, Any]) -> Tuple[str, Any]:
-    # will need to check % conflict, and smallest among all
-	"""Simple heuristic to pick a best result: prefer structured (dict/list), otherwise first non-error string."""
-	# prefer structured
-	for k, v in results.items():
-		if _is_structured(v):
-			return k, v
+def pick_best_result(results, grid, numbers) -> Tuple[str, Any]:
+    """Pick the best result by computing and comparing conflict percentages."""
+    import cv2
 
-	# fallback: first non-error result
-	for k, v in results.items():
-		if not (isinstance(v, str) and v.startswith("__ERROR__:")):
-			return k, v
+    def compute_conflict_percentage(result):
+        rows, cols = len(grid), len(grid[0])
+        filled = [[None for _ in range(cols)] for _ in range(rows)]
+        total_letters = 0
+        conflict_count = 0
 
-	# if all errored, return the first error
-	first_key = next(iter(results))
-	return first_key, results[first_key]#
+        for direction in ['across', 'down']:
+            for num, word in result.get('solutions', {}).get(direction, {}).items():
+                if num not in numbers:
+                    continue
+                start_r, start_c = numbers[num]
+                for idx, char in enumerate(word):
+                    r, c = start_r, start_c
+                    if direction == 'across':
+                        c += idx
+                    else:
+                        r += idx
+
+                    if 0 <= r < rows and 0 <= c < cols and grid[r][c] != 0:
+                        total_letters += 1
+                        if filled[r][c] is None:
+                            filled[r][c] = char
+                        elif filled[r][c] != char:
+                            conflict_count += 1
+
+        return (conflict_count / total_letters) * 100 if total_letters > 0 else 100.0
+
+    best_key, best_value = None, None
+    lowest_conflict = float('inf')
+
+    for k, v in results.items():
+        if isinstance(v, dict) and 'solutions' in v:
+            conflict = compute_conflict_percentage(v)
+            v['conflict_percentage'] = conflict
+            if conflict < lowest_conflict:
+                best_key, best_value = k, v
+                lowest_conflict = conflict
+
+    if best_key is not None:
+        return best_key, best_value
+
+    for k, v in results.items():
+        if isinstance(v, (dict, list)):
+            return k, v
+
+    for k, v in results.items():
+        if not (isinstance(v, str) and v.startswith('__ERROR__:')):
+            return k, v
+
+    first_key = next(iter(results))
+    return first_key, results[first_key]

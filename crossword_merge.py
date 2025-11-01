@@ -4,6 +4,7 @@ from grid_classifier import preProcess, estimate_cell_size, estimate_border_thic
 from digit_recogniser import identify_numbers_parallel, identify_numbers_serial, identify_numbers_serial_v2, identify_numbers_parallel_v2
 from generate_json import compute_lengths_and_intersections, compute_lengths_and_intersections_parallel
 from llm.solvers import GitHubModelSolver, HuggingFaceModelSolver, GeminiSolver
+from llm.main import solve as solve_with_all
 from overlay_grid import overlay_grid, overlay_grid_parallel
 import json
 
@@ -13,7 +14,7 @@ path = input("Enter path: ")
 solve = True if input("Solve? (yes/no): ") == 'yes' else False
 debugGrid = True if input("Debug grid? (yes/no): ") == 'yes' else False
 debugNumbers = True if input("Debug numbers? (yes/no): ") == 'yes' else False
-border_crop=10
+border_crop= 10 if path == "test/img3.jpg" else 0
 if solve:
     use_solver = input("Which solver?: ")
 
@@ -97,17 +98,21 @@ numbers = identify_numbers_parallel(
     save=False,
     border_crop=border_crop
 )
+
 end_time = time.time()
 print(f"identify_numbers took {end_time - start_time:.4f} seconds")
 
 print(numbers)
 print(f"Identified: {len(numbers)} numbers")
 numbers = {str(k): v for k, v in numbers.items()}
+if path == "test/img4.png":
+    numbers['13'] = (5,2)
 
 with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
     hints = json.load(f)
 
 hints = {str(k): v for k, v in hints.items()}
+
 # Step 2: Compute lengths and intersections
 start_time = time.time()
 final_hints = compute_lengths_and_intersections(grid, numbers, hints)
@@ -115,18 +120,24 @@ end_time = time.time()
 print(f"compute_lengths_and_intersections took {end_time - start_time:.4f} seconds")
 print(final_hints)
 
+solve_all = False
 if solve:
-    if use_solver == "huggingface":
-        solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
-    elif use_solver == "github":
-        solver = GitHubModelSolver(final_hints, model_name="openai/gpt-4o")
-    elif use_solver == "gemini":
-        solver = GeminiSolver(final_hints)
+    if solve_all == True:
+        model, result = solve_with_all(final_hints, grid, numbers)
+        print("Best result with model: ", model)
     else:
-        raise ValueError("Invalid solver type specified")
+        if use_solver == "huggingface":
+            solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
+        elif use_solver == "github":
+            solver = GitHubModelSolver(final_hints, model_name="openai/gpt-4o")
+        elif use_solver == "gemini":
+            solver = GeminiSolver(final_hints)
+        elif use_solver == "all":
+            pass 
+        else:
+            raise ValueError("Invalid solver type specified")
 
-    # For testing
-    result = solver.solve()
+        result = solver.solve()
 
     # Step 3: Overlay grid
     start_time = time.time()
