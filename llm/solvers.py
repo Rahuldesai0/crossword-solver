@@ -5,13 +5,10 @@ from llm.github_model_solver import GitHubModelSolver
 from llm.gemini_solver import GeminiSolver
 from llm.hf_solver import HuggingFaceModelSolver
 
-
-def _is_structured(result: Any) -> bool:
-	# prefer dict/list (parsed JSON-like) results
-	return isinstance(result, (dict, list))
-
 def solve_in_parallel(input_json: str, solvers_and_models: List[Tuple[str, str]], 
+                      grid, numbers,
                       max_workers: int = 4, timeout: int = 300) -> Dict[str, Any]:
+
     def make_solver(name: str, model: str):
         if name == 'gemini':
             return GeminiSolver(input_json=input_json, model_name=model)
@@ -20,36 +17,6 @@ def solve_in_parallel(input_json: str, solvers_and_models: List[Tuple[str, str]]
         if name == 'hf':
             return HuggingFaceModelSolver(input_json=input_json, model_name=model)
         raise ValueError(f"Unknown solver: {name}")
-
-    results: Dict[str, Any] = {}
-
-    with ThreadPoolExecutor(max_workers=max_workers) as exe:
-        future_map = {}
-        for name, model in solvers_and_models:
-            solver = make_solver(name, model)
-            key = f"{name}:{model}"
-            future = exe.submit(solver.solve)
-            future_map[future] = key
-
-        for fut in as_completed(future_map):
-            key = future_map[fut]
-            try:
-                res = fut.result(timeout=timeout)
-                print(f"Result obtained from {key}")  # <-- print when a result is ready
-            except TimeoutError:
-                res = f"__TIMEOUT__ after {timeout}s"
-                print(f"Timeout for {key}")
-            except Exception as e:
-                res = f"__ERROR__:{e}"
-                print(f"Error in {key}: {e}")
-            results[key] = res
-
-    return results
-
-
-def pick_best_result(results, grid, numbers) -> Tuple[str, Any]:
-    """Pick the best result by computing and comparing conflict percentages."""
-    import cv2
 
     def compute_conflict_percentage(result):
         rows, cols = len(grid), len(grid[0])
@@ -78,27 +45,48 @@ def pick_best_result(results, grid, numbers) -> Tuple[str, Any]:
 
         return (conflict_count / total_letters) * 100 if total_letters > 0 else 100.0
 
+    results: Dict[str, Any] = {}
+
+    with ThreadPoolExecutor(max_workers=max_workers) as exe:
+        future_map = {}
+        for name, model in solvers_and_models:
+            solver = make_solver(name, model)
+            key = f"{name}:{model}"
+            future = exe.submit(solver.solve)
+            future_map[future] = key
+
+        for fut in as_completed(future_map):
+            key = future_map[fut]
+            try:
+                res = fut.result(timeout=timeout)
+                if isinstance(res, dict) and 'solutions' in res:
+                    res['conflict_percentage'] = compute_conflict_percentage(res)
+                else:
+                    res = {'output': res, 'conflict_percentage': 100.0}
+                print(f"Result obtained from {key} (conflict={res['conflict_percentage']:.2f}%)")
+            except TimeoutError:
+                res = {'error': f"__TIMEOUT__ after {timeout}s", 'conflict_percentage': 100.0}
+                print(f"Timeout for {key}")
+            except Exception as e:
+                res = {'error': f"__ERROR__:{e}", 'conflict_percentage': 100.0}
+                print(f"Error in {key}: {e}")
+            results[key] = res
+
+    return results
+
+
+def pick_best_result(results) -> Tuple[str, Any]:
     best_key, best_value = None, None
     lowest_conflict = float('inf')
 
     for k, v in results.items():
-        if isinstance(v, dict) and 'solutions' in v:
-            conflict = compute_conflict_percentage(v)
-            v['conflict_percentage'] = conflict
-            if conflict < lowest_conflict:
+        if isinstance(v, dict) and 'conflict_percentage' in v:
+            if v['conflict_percentage'] < lowest_conflict:
                 best_key, best_value = k, v
-                lowest_conflict = conflict
+                lowest_conflict = v['conflict_percentage']
 
     if best_key is not None:
         return best_key, best_value
-
-    for k, v in results.items():
-        if isinstance(v, (dict, list)):
-            return k, v
-
-    for k, v in results.items():
-        if not (isinstance(v, str) and v.startswith('__ERROR__:')):
-            return k, v
 
     first_key = next(iter(results))
     return first_key, results[first_key]
