@@ -21,7 +21,6 @@ class HuggingFaceModelSolver(CrosswordSolverModel):
         self.model_name = model_name
 
     def solve(self):
-
         payload = {
             "model": self.model_name,
             "messages": [
@@ -66,24 +65,34 @@ class HuggingFaceModelSolver(CrosswordSolverModel):
         try:
             msg_content = result["choices"][0]["message"]["content"]
 
-            # if content is a string, parse it
             if isinstance(msg_content, str):
+                cleaned = msg_content.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned.removeprefix("```json").strip()
+                if cleaned.endswith("```"):
+                    cleaned = cleaned.removesuffix("```").strip()
                 try:
-                    parsed = json.loads(msg_content)
-                    return parsed
+                    return json.loads(cleaned)
                 except json.JSONDecodeError:
-                    return msg_content  # fallback to raw string
+                    return cleaned  # fallback to raw text if not valid JSON
 
-            # if content is a list of dicts 
             elif isinstance(msg_content, list) and len(msg_content) > 0:
                 if "text" in msg_content[0]:
-                    return msg_content[0]["text"]
-            
-            # fallback: return string
+                    text = msg_content[0]["text"].strip()
+                    if text.startswith("```json"):
+                        text = text.removeprefix("```json").strip()
+                    if text.endswith("```"):
+                        text = text.removesuffix("```").strip()
+                    try:
+                        return json.loads(text)
+                    except json.JSONDecodeError:
+                        return text
+
             return str(msg_content)
 
         except (KeyError, IndexError, TypeError) as e:
             raise RuntimeError(f"Unexpected response format: {result}. Error: {e}")
+
 
 
 input_json = """

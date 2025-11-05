@@ -52,6 +52,7 @@ def solve_in_parallel(input_json: str, solvers_and_models: List[Tuple[str, str]]
         for name, model in solvers_and_models:
             solver = make_solver(name, model)
             key = f"{name}:{model}"
+            print(f"Starting solver {key}...")
             future = exe.submit(solver.solve)
             future_map[future] = key
 
@@ -59,6 +60,7 @@ def solve_in_parallel(input_json: str, solvers_and_models: List[Tuple[str, str]]
             key = future_map[fut]
             try:
                 res = fut.result(timeout=timeout)
+                print(res)
                 if isinstance(res, dict) and 'solutions' in res:
                     res['conflict_percentage'] = compute_conflict_percentage(res)
                 else:

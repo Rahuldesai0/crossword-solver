@@ -1,7 +1,6 @@
 import cv2 
 import numpy as np
 from skimage.morphology import skeletonize
-from ocr import ocr_image
 from digit_classifiers.digit_model_v2 import detect_digit_with_preprocessing as detect_number_v2
 from digit_classifiers.digit_model_v3 import detect_number_v3
 from digit_classifiers.digit_model_v4 import detect_number_v4

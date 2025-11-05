@@ -14,15 +14,14 @@ Rules:
 * Do not output explanations, reasoning, or extra text.
 * Output strictly valid JSON that matches this schema:
 
-```json
 {{
   "solutions": {{
     "across": {{ "clue_number": "ANSWER" }},
     "down":   {{ "clue_number": "ANSWER" }}
   }},
 }}
-````
 
+Do not return ``` json ```. This is highly imperative.
 Return **only** the JSON as text, as I want to convert it into a dictionary later on.
 Example output:
 {
