@@ -1,39 +1,41 @@
-You are given a crossword puzzle in JSON format.
-The crossword consists of a grid and a set of clues (across and down). It also consists of length of each answer and the intersections.
+You are given a crossword puzzle in JSON format containing a grid, clues (across and down), answer lengths, and intersections.
 
 Your task:
+1. Solve all clues using crossword-style answers
+2. Intersections are one-indexed with respect to each word
+3. Return only a JSON object with all solutions
 
-1. Solve all the clues.
-2. The intersections in the input are all one-indexed with respect to the word
-3. Return only a JSON object containing:
+Crossword answer guidelines:
+* Answers may include: common words, proper nouns, phrases (without spaces), abbreviations, acronyms, slang, wordplay, anagrams, homophones, fill-in-the-blank completions, and cryptic constructions
+* Answers are typically uppercase with no spaces, punctuation, or special characters
+* Use intersecting letters to validate answers
+* Consider multiple meanings, puns, and misdirection in clues
+* Historical figures, geographical locations, brands, titles, and cultural references are common
 
-* `"solutions"`: all solved answers keyed by their clue number, separated into `"across"` and `"down"`.
+Output requirements:
+* Return strictly valid JSON with no markdown formatting, no code blocks, no explanations
+* Do not include ```json``` or any other wrapper
+* Output only raw JSON text that can be directly parsed
 
-Rules:
+Required JSON schema:
+{
+  "solutions": {
+    "across": { "clue_number": "ANSWER" },
+    "down": { "clue_number": "ANSWER" }
+  }
+}
 
-* Do not output explanations, reasoning, or extra text.
-* Output strictly valid JSON that matches this schema:
-
-{{
-  "solutions": {{
-    "across": {{ "clue_number": "ANSWER" }},
-    "down":   {{ "clue_number": "ANSWER" }}
-  }},
-}}
-
-Do not return ``` json ```. This is highly imperative.
-Return **only** the JSON as text, as I want to convert it into a dictionary later on.
 Example output:
 {
   "solutions": {
     "across": {
-      "3": "word3",
-      "4": "word4",
-      "5": "word5"
+      "3": "ELEPHANT",
+      "4": "NYC",
+      "5": "ILOVEYOU"
     },
     "down": {
-      "1": "word1",
-      "2": "word2"
+      "1": "EINSTEIN",
+      "2": "FAQ"
     }
   }
 }

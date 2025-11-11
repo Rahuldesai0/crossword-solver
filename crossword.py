@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
 from grid_classifier import preProcess, estimate_cell_size, estimate_border_thickness, classify_grid
-from digit_recogniser import identify_numbers_parallel, identify_numbers_serial, identify_numbers_serial_v2, identify_numbers_parallel_v2
-from generate_json import compute_lengths_and_intersections, compute_lengths_and_intersections_parallel
+from digit_recogniser import identify_numbers_parallel, identify_numbers_serial
+from generate_json import compute_lengths_and_intersections
 from llm.solvers import GitHubModelSolver, HuggingFaceModelSolver, GeminiSolver
 from llm.main import solve as solve_with_all
 from overlay_grid import overlay_grid
@@ -100,17 +100,15 @@ numbers = identify_numbers_parallel(
     debug=debugNumbers,
     hardcode=False,
     save=False,
-    border_crop=border_crop
+    border_crop=border_crop,
 )
 
+print(numbers)
 end_time = time.time()
 print(f"identify_numbers took {end_time - start_time:.4f} seconds")
 
-print(numbers)
 print(f"Identified: {len(numbers)} numbers")
 numbers = {str(k): v for k, v in numbers.items()}
-if path == "test/img4.png":
-    numbers['13'] = (5,2)
 
 with open('./json/img3_hints.json', 'r', encoding='utf-8') as f:
     hints = json.load(f)
@@ -131,7 +129,7 @@ if solve:
         if use_solver == "huggingface":
             solver = HuggingFaceModelSolver(final_hints, model_name="Qwen/Qwen3-VL-235B-A22B-Instruct:novita")
         elif use_solver == "github":
-            solver = GitHubModelSolver(final_hints, model_name="openai/gpt-4o")
+            solver = GitHubModelSolver(final_hints, model_name="openai/gpt-5-mini")
         elif use_solver == "gemini":
             solver = GeminiSolver(final_hints)
         elif use_solver == "all":
@@ -139,7 +137,11 @@ if solve:
         else:
             raise ValueError("Invalid solver type specified")
 
+        import time 
+        s = time.time()
         result = solver.solve()
+        e = time.time()
+        print(f"Took {e-s} seconds to solve")
 
     # Step 3: Overlay grid
     start_time = time.time()
@@ -151,3 +153,6 @@ if solve:
     cv2.imshow("Solved Crossword", solved_img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+# gemini took 97 seconds

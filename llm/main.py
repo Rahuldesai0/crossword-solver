@@ -6,11 +6,13 @@ def solve(input_json, grid, numbers):
     pairs = [
         ('github', 'openai/gpt-4.1'),
         ('github', 'openai/gpt-4o'),
+        ('github', 'meta/llama-3.3-70b-instruct'),
+        ('github', 'cohere/cohere-command-a'),
         ('github', 'microsoft/phi-4'),
-        ('hf', 'Qwen/Qwen3-VL-235B-A22B-Instruct:novita'),
         ('hf', 'google/gemma-2-2b-it'),
+        ('github', 'mistral-ai/mistral-small-2503'),
+        ('hf', 'Qwen/Qwen3-VL-235B-A22B-instruct:novita'),
     ]
-    
     pairs_more_time = [
         ('github', 'openai/gpt-5-mini'),
         ('github', 'deepseek/DeepSeek-R1-0528'),
